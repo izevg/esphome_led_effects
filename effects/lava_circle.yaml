@@ -1,0 +1,64 @@
+# @type:              line / encircled line
+# @framework:         esp32_rmt_led_strip
+# @length-dependent:  no
+# @description:       lava-lamp-like effect, which works both for straight and encircled strips.
+#                     supports customization through HA color picker.
+- addressable_lambda:
+    name: "Lava Circle"
+    update_interval: 20ms
+    lambda: |-
+      static uint16_t time_base = 0;
+      time_base++;
+      
+      // Parameters for wave effect
+      float wave_speed = 0.02f;
+      float blend_factor = 0.7f;
+      uint8_t max_brightness = 200;
+      
+      // Get current color from light state
+      auto base_color = current_color;
+      
+      // Generate color palette based on current color
+      Color colors[] = {
+        base_color,  // Main color
+        base_color.fade_to_white(64),  // Lighter version
+        base_color.fade_to_white(128), // Even lighter
+        base_color.darken(128)         // Darker version
+      };
+      uint8_t num_colors = sizeof(colors) / sizeof(colors[0]);
+      
+      // Update each LED
+      for (int i = 0; i < it.size(); i++) {
+        float pos = i * (1.0f / it.size());
+        
+        // Create multiple overlapping waves
+        float wave1 = sin(pos * 3.14159f * 4 + time_base * wave_speed);
+        float wave2 = sin(pos * 3.14159f * 6 - time_base * wave_speed * 1.5f);
+        float wave3 = sin(pos * 3.14159f * 2 + time_base * wave_speed * 0.7f);
+        
+        // Combine waves
+        float combined = (wave1 + wave2 + wave3) / 3.0f;
+        combined = (combined + 1.0f) / 2.0f;  // Normalize to 0-1 range
+        
+        // Use combined value to select and blend colors
+        int color_idx = (int)(combined * (num_colors - 1));
+        float blend = combined * (num_colors - 1) - color_idx;
+        
+        Color color1 = colors[color_idx];
+        Color color2 = colors[min(color_idx + 1, num_colors - 1)];
+        
+        // Blend between colors
+        float r = color1.r * (1 - blend) + color2.r * blend;
+        float g = color1.g * (1 - blend) + color2.g * blend;
+        float b = color1.b * (1 - blend) + color2.b * blend;
+        
+        // Apply brightness modulation
+        float brightness = 0.5f + (combined * 0.5f);
+        brightness = min(brightness * max_brightness, 255.0f);
+        
+        it[i] = Color(
+          (uint8_t)(r * brightness / 255),
+          (uint8_t)(g * brightness / 255),
+          (uint8_t)(b * brightness / 255)
+        );
+      }
